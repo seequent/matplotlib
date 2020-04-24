@@ -381,6 +381,22 @@ def my_customize_compiler(compiler):
 distutils.command.build_ext.customize_compiler = my_customize_compiler
 
 
+def extra_compile_args(name):
+    pdb_path = name.split('.')[-1]
+    major, minor = sys.version_info[:2]
+    if '--debug' in sys.argv:
+        return ['/Zi', r'/Fd"build\temp.win-amd64-%d.%d\Debug\%s_d.pdb"' % (major, minor, pdb_path)]
+    return ['/Od', '/Zi', r'/Fd"build\temp.win-amd64-%d.%d\Release\%s.pdb"' % (major, minor, pdb_path)]
+
+
+def extra_link_args(name):
+    pdb_path = '\\'.join(name.split('.'))
+    major, minor = sys.version_info[:2]
+    if '--debug' in sys.argv:
+        return ['/DEBUG', r'/pdb:"build\lib.win-amd64-%d.%d\%s_d.pdb"' % (major, minor, pdb_path)]
+    return ['/DEBUG', r'/pdb:"build\lib.win-amd64-%d.%d\%s.pdb"' % (major, minor, pdb_path)]
+
+
 def make_extension(name, files, *args, **kwargs):
     """
     Make a new extension.  Automatically sets include_dirs and
@@ -404,6 +420,8 @@ def make_extension(name, files, *args, **kwargs):
             if os.path.exists(lib_dir):
                 ext.library_dirs.append(lib_dir)
     ext.include_dirs.append('.')
+    ext.extra_compile_args.extend(extra_compile_args(name))
+    ext.extra_link_args.extend(extra_link_args(name))
 
     return ext
 
@@ -1238,7 +1256,7 @@ class FreeType(SetupPackage):
                     'lib/freetype2/include/freetype2'],
                 default_library_dirs=[
                     'freetype2/lib'],
-                default_libraries=['freetype', 'z'])
+                default_libraries=['freetype', 'zlib'])
             ext.define_macros.append(('FREETYPE_BUILD_TYPE', 'system'))
 
     def do_custom_build(self):
@@ -1398,7 +1416,7 @@ class Png(SetupPackage):
             ]
         ext = make_extension('matplotlib._png', sources)
         pkg_config.setup_extension(
-            ext, 'libpng', default_libraries=['png', 'z'],
+            ext, 'libpng', default_libraries=['libpng', 'zlib'],
             alt_exec='libpng-config --ldflags')
         Numpy().add_flags(ext)
         return ext
@@ -1672,6 +1690,8 @@ class BackendGtk(OptionalBackendPackage):
             pygtkLinker = getoutput('pkg-config --libs pygtk-2.0').split()
             gtkLinker = getoutput('pkg-config --libs gtk+-2.0').split()
             linkerFlags = pygtkLinker + gtkLinker
+
+            ext.libraries.extend(['gdk', 'gdk_pixbuf', 'gobject'])
 
             ext.libraries.extend(
                 [flag[2:] for flag in linkerFlags if flag.startswith('-l')])
